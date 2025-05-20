@@ -1,0 +1,21 @@
+[project]
+name = "spare"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Matt Potok", email = "potok@mattpotok.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "google-api-python-client>=2.169.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.2",
+]
+
+[project.scripts]
+spare = "spare.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
