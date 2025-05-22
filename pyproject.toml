@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "Matt Potok", email = "potok@mattpotok.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.9"
 dependencies = [
     "google-api-python-client>=2.169.0",
     "google-auth-httplib2>=0.2.0",
