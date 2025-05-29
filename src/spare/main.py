@@ -1,9 +1,17 @@
-import tomllib
 from argparse import ArgumentParser
-from pathlib import Path
+from dataclasses import dataclass
+
+import tomllib
 
 from spare.common import CONFIG_DIR_PATH, CONFIG_FILE_PATH, DATA_DIR_PATH
-from spare.providers import google_drive
+from spare.providers.common import Profile, Provider
+from spare.providers.google_drive import GoogleDriveProfile, GoogleDriveProvider
+
+
+@dataclass
+class Handler:
+    profile: type[Profile]
+    provider: type[Provider]
 
 
 def initialize():
@@ -33,13 +41,18 @@ def main():
     profiles = config.get("profiles", {})
     profile = profiles.get(args.profile, None)
     if not profile:
-        # TODO log an error here
-        raise ValueError(f"Invalid profile '{args.profile}'")
+        raise KeyError(f"Profile '{args.profile}' does not exist")
 
-    if profile.get("provider") == "google-drive":
-        credentials_path = Path(profile.get("credentials_path", ""))
-        folder_path = Path(profile.get("folder", ""))
-        paths = profile.get("paths", [])
-        versions = profile.get("versions", -1)
+    handlers: dict[str, Handler] = {
+        "google-drive": Handler(GoogleDriveProfile, GoogleDriveProvider)
+    }
 
-        google_drive.backup(paths, versions, folder_path, credentials_path)
+    provider = profile.get("provider")
+    if provider is None or provider not in handlers:
+        raise ValueError(
+            f"Invalid provider '{provider}', must be one of {list(handlers.keys())}"
+        )
+
+    handler = handlers[provider]
+    profile = handler.profile.from_profile(profile)
+    handler.provider.backup(profile)

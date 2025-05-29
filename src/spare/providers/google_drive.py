@@ -1,9 +1,10 @@
+import dataclasses
 import os.path
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from shutil import copy, copytree, make_archive
 from tempfile import TemporaryDirectory
+from typing import Any
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -11,13 +12,17 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
+from marshmallow import Schema, fields, post_load, validate
 
 from spare.common import DATA_DIR_PATH
-
-# TODO create a new directory
-
-# If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+from spare.providers.common import (
+    PathField,
+    Profile,
+    Provider,
+    create_archive,
+    validate_file_path,
+    validate_version,
+)
 
 
 @dataclass
@@ -25,6 +30,31 @@ class File:
     id: str
     name: str
     parents: list[str]
+
+
+@dataclass
+class GoogleDriveProfile(Profile):
+    credentials_path: Path
+    destination: Path
+    sources: list[str]
+    versions: int
+
+    class _Schema(Schema):
+        credentials_path = PathField(validate=[validate_file_path])
+        destination = PathField()
+        provider = fields.String(validate=[validate.Equal("google-drive")])
+        sources = fields.List(fields.String())
+        versions = fields.Integer(validate=[validate_version])
+
+        @post_load
+        def create(self, data, **kwargs) -> "GoogleDriveProfile":
+            names = [field.name for field in dataclasses.fields(GoogleDriveProfile)]
+            return GoogleDriveProfile(**{name: data[name] for name in names})
+
+    @classmethod
+    def from_profile(cls, profile: dict[str, Any]) -> "GoogleDriveProfile":
+        schema = GoogleDriveProfile._Schema()
+        return schema.load(profile)  # type: ignore
 
 
 class GoogleDriveService:
@@ -156,59 +186,29 @@ class GoogleDriveService:
         return file
 
 
-def backup(paths: list[str], versions: int, folder_path: Path, credentials_path: Path):
-    # TODO check for 0 version much sooner in the code
-    if versions == 0:
-        # TODO log a message
-        return
+class GoogleDriveProvider(Provider):
+    @classmethod
+    def backup(cls, profile: GoogleDriveProfile) -> None:
+        service = GoogleDriveService(profile.credentials_path)
+        folder = service.create_folder_hierarchy(profile.destination)
+        if not folder:
+            # TODO log a message
+            return
 
-    service = GoogleDriveService(credentials_path)
-    folder = service.create_folder_hierarchy(folder_path)
-    if not folder:
-        # TODO log a message
-        return
+        with TemporaryDirectory() as tmp_dir:
+            dir_path = Path(tmp_dir)
+            archive_path = create_archive(dir_path, profile.sources)
+            service.upload_file(archive_path, "application/zip", folder.id)
 
-    with TemporaryDirectory() as tmp_dir:
-        dir_path = Path(tmp_dir)
-        archive_path = create_archive(dir_path, paths)
-        service.upload_file(archive_path, "application/zip", folder.id)
+        if profile.versions <= 1:
+            return
 
-    if versions <= 1:
-        return
+        files = service.get_files(folder.id)
 
-    files = service.get_files(folder.id)
+        def sort_by_datetime(file) -> datetime:
+            return datetime.fromisoformat(file.name.removesuffix(".zip"))
 
-    def sort_by_datetime(file) -> datetime:
-        return datetime.fromisoformat(file.name.removesuffix(".zip"))
+        files.sort(key=sort_by_datetime, reverse=True)
 
-    files.sort(key=sort_by_datetime, reverse=True)
-
-    for file in files[versions:]:
-        service.remove_file(file.id)
-
-
-def create_archive(dir_path: Path, paths: list[str]) -> Path:
-    archive_dir_path = dir_path / "archive"
-    archive_dir_path.mkdir()
-
-    for path in paths:
-        path = Path(path)
-        if not path.exists():
-            # TODO throw an error here instead
-            continue
-
-        if path.is_file():
-            copy(path, archive_dir_path)
-        elif path.is_dir():
-            copytree(path, archive_dir_path / path.name)
-        else:
-            # TODO throw an error here
-            continue
-
-    # Figure out if the os.chdir is necessary
-    os.chdir(dir_path)
-    archive_name = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    make_archive(archive_name, "zip", archive_dir_path)
-
-    archive_path = dir_path / f"{archive_name}.zip"
-    return archive_path
+        for file in files[profile.versions :]:
+            service.remove_file(file.id)
