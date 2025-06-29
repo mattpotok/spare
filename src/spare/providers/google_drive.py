@@ -59,7 +59,7 @@ class GoogleDriveProfile(Profile):
 
 class GoogleDriveService:
     _FILE_FIELDS = "id, name, parents"
-    _SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+    _SCOPES = ["https://www.googleapis.com/auth/drive"]
     _TOKEN_FILE_PATH = DATA_DIR_PATH / "token.json"
 
     def __init__(self, credentials_path: Path):
