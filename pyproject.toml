@@ -1,6 +1,6 @@
 [project]
 name = "spare"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -23,3 +23,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/spare"]
+
+[tool.hatch.version]
+path = "src/spare/__version__.py"

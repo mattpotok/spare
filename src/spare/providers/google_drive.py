@@ -169,6 +169,8 @@ class GoogleDriveService:
         if not files:
             return None
 
+        # TODO: Handle multiple folders with the same name
+
         return File(**files[0])
 
     def remove_file(self, file_id: str):
