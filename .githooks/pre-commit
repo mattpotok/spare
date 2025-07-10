@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+# Check if '__version__.py' has been updated.
+if git diff --cached --name-only | grep -q 'src/spare/__version__.py'; then
+    exit 0
+else
+    echo "Error: '__version__.py' must be modified before committing."
+    echo "Would you like to proceed anyway? (y/n)"
+
+    exec < /dev/tty
+    read user_input
+    if [[ "$user_input" == "y" ]]; then
+        echo "Proceeding with the commit..."
+        exit 0
+    else
+        echo "Commit aborted."
+        exit 1
+    fi
+fi
